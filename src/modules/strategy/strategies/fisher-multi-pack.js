@@ -172,16 +172,6 @@ module.exports = class FisherMultiPack {
             //console.log("Math.max(highval - lowval, 0.001)",Math.max(highval - lowval, 0.001));
         }
         return fish;
-        /*
-        highval = highest(x, t)
-        lowval  = lowest(x, t)
-        val1    = 0.0
-        val1   := 0.66 * ((x - lowval) / max(highval - lowval, 0.001) - 0.5) + 0.67*nz(val1[1], 0)
-        val2    = val1 > 0.99 ? 0.999 : val1 < -0.99 ? -0.999 : val1
-        fish    = 0.0
-        fish   := 0.5 * log((1 + val2) / max(1 - val2, 0.001)) + 0.5*nz(fish[1], 0)
-        fish
-        */
     }
 
     ifishrsi(indicatorPeriod, options) {

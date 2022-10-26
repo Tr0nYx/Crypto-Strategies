@@ -89,6 +89,8 @@ module.exports = class Squeeze {
         /** Calc Trailing StopLoss END */
 
         if (signal === 'close' && lastSignal) {
+            indicatorPeriod.getStrategyContext().options.sl = 0;
+            indicatorPeriod.getStrategyContext().options.high_watermark = 0;
             return SignalResult.createSignal('close', debug);
         }
         if (!lastSignal && signal !== 'close') {
