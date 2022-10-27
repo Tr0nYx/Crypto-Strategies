@@ -38,6 +38,7 @@ module.exports = class Squeeze {
         var lowerKC = mid - (options.multKC * atr);
         var sqzOn = (bbands.lower > lowerKC) && (bbands.upper < upperKC)
         var sqzOff = (bbands.lower < lowerKC) && (bbands.upper > upperKC)
+        var noSqz  = (sqzOn === false) && (sqzOff === false)
         for (var i = 0, len = lastCandles.length; i < len; i++) {
             highs[i] = lastCandles[i].high;
             lows[i] = lastCandles[i].low;
@@ -49,7 +50,8 @@ module.exports = class Squeeze {
         var emaAvg = (hlavg + ema) / 2;
         emaAvg = candle.close - emaAvg;
         const debug = {
-            color: '#cccccc'
+            color: '#cccccc',
+            squeeze: sqzOn
         };
         indicatorPeriod.getStrategyContext().options.emaAvg.push(emaAvg);
         if (indicatorPeriod.getStrategyContext().options.emaAvg.length < options.length) {
@@ -62,12 +64,13 @@ module.exports = class Squeeze {
         debug.linReg = linReg;
         debug.emaAvg = indicatorPeriod.getStrategyContext().options.linReg;
         if (linReg > 0) {
-            if (linReg > indicatorPeriod.getStrategyContext().options.linReg) {
+            if (linReg > indicatorPeriod.getStrategyContext().options.linReg && sqzOn) {
                 debug.color = '#05ffa6';
                 signal = 'long';
             } else {
                 debug.color = '#00945f';
-                signal = 'close';
+                if (sqzOff)
+                    signal = 'close';
             }
         } else {
             if (linReg < indicatorPeriod.getStrategyContext().options.linReg) {

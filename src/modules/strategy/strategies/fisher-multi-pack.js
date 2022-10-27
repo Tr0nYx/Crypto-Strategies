@@ -1,6 +1,7 @@
 // Source: https://www.tradingview.com/script/hXp5irRI-Fisher-Multi-Pack-DW/
 // By https://www.tradingview.com/u/DonovanWall/
 const SignalResult = require('../dict/signal_result');
+const talib = require('talib');
 
 module.exports = class FisherMultiPack {
     getName() {
@@ -11,52 +12,52 @@ module.exports = class FisherMultiPack {
         if (!options.period) {
             throw Error('Invalid period');
         }
-        indicatorBuilder.add('sma', 'sma', options.period, {'length': options.timeperiod});
         indicatorBuilder.add('rsi', 'rsi', options.period, {'length': options.timeperiod});
         indicatorBuilder.add('stoch_rsi', 'stoch_rsi', options.period, {'length': options.timeperiod});
         indicatorBuilder.add('stoch', 'stoch', options.period, {'length': options.timeperiod});
+        indicatorBuilder.add('cci', 'cci', options.period, {'length': options.timeperiod});
         // ATR for Stoploss
         indicatorBuilder.add('atr', 'atr', options.period, {'length': options.timeperiod});
         // ATR for Stoploss
     }
 
     period(indicatorPeriod, options) {
-        const debug = {};
         var candles = indicatorPeriod.getIndicator('candles').slice(0, -1);
-        var rsi = indicatorPeriod.getIndicator('rsi').slice(0, -1);
-        var sma = indicatorPeriod.getIndicator('sma').slice(0, -1);
-        var stoch = indicatorPeriod.getIndicator('stoch').slice(0, -1);
-        var atr = indicatorPeriod.getIndicator('atr').slice(0, -1);
+        var rsi = indicatorPeriod.getLatestIndicator('rsi');
+        var stoch = indicatorPeriod.getLatestIndicator('stoch');
+        var atr = indicatorPeriod.getLatestIndicator('atr');
+        var cci = indicatorPeriod.getLatestIndicator('cci');
         if (!indicatorPeriod.getStrategyContext().options.oscillator) {
             indicatorPeriod.getStrategyContext().options.oscillator = 0;
         }
         const lastSignal = indicatorPeriod.getLastSignal();
         if (!candles ||
             !rsi ||
-            !sma ||
             !stoch ||
             !atr ||
-            rsi.length < options.timeperiod ||
-            stoch.length < options.timeperiod ||
             candles.length < options.timeperiod
         ) {
             return SignalResult.createEmptySignal(debug);
         }
 
         var signal = 'none';
-        debug.rsi = 0;
+        const debug = {
+            rsi: 0
+        }
         var oscillator;
         if (options.oscillator_type === 1) {
             oscillator = this.fish(indicatorPeriod, options, debug);
             debug.rsi = oscillator[oscillator.length - 1];
         } else if (options.oscillator_type === 2) {
             oscillator = this.ifishrsi(indicatorPeriod, options);
-            rsi = rsi[rsi.length - 1];
             debug.rsi = rsi;
         } else if (options.oscillator_type === 3) {
             oscillator = this.ifishstoch(indicatorPeriod, options);
-            rsi = stoch[stoch.length - 1].stoch_k;
+            rsi = stoch.stoch_k;
             debug.rsi = rsi;
+        } else if (options.oscillator_type === 4) {
+            oscillator = this.ifishcci(indicatorPeriod, options);
+            debug.rsi = cci;
         }
         var oscillator_ema = this.ema(oscillator, options.ema_smoothing);
         oscillator_ema = oscillator_ema[oscillator_ema.length - 1];
@@ -77,7 +78,7 @@ module.exports = class FisherMultiPack {
         if (oscillator_ema > 0 && oscillator_ema >= indicatorPeriod.getStrategyContext().options.oscillator && oscillator_ema >= hth) {
             debug.trend_type = 'bullpower';
             debug.color = '#05ffa6';
-            signal = 'long';
+            signal = 'none';
             debug.trend = 'up';
         }
         if (oscillator_ema > 0 && oscillator_ema > indicatorPeriod.getStrategyContext().options.oscillator && oscillator_ema < hth) {
@@ -96,7 +97,7 @@ module.exports = class FisherMultiPack {
         if (oscillator_ema < 0 && oscillator_ema <= indicatorPeriod.getStrategyContext().options.oscillator && oscillator_ema <= lth) {
             debug.trend_type = 'bearpower';
             debug.color = '#ff0a70';
-            signal = 'short';
+            signal = 'none';
             debug.trend = 'down';
         }
         if (oscillator_ema < 0 && oscillator_ema < indicatorPeriod.getStrategyContext().options.oscillator && oscillator_ema > lth) {
@@ -145,19 +146,15 @@ module.exports = class FisherMultiPack {
     fish(indicatorPeriod, options, debug) {
         var val1 = [], val, val2, x, fish = [];
         var candles = indicatorPeriod.getIndicator('candles').slice(options.timeperiod * -1);
-        candles = candles.reverse();
-        let highval = 0;
-        let lowval = candles[0].close;
-        for (var i = candles.length - 1; i >= 0; i--) {
-            for (var j = candles.length - 1; j >= 0; j--) {
-                x = candles[0].close;
-                if (candles[j].close > highval) {
-                    highval = candles[j].close;
-                }
-                if (candles[j].close < lowval) {
-                    lowval = candles[j].close;
-                }
-            }
+        const minMax = candles.reduce(
+            (accumulator, currentValue) => {
+                return [Math.min(currentValue.low, accumulator[0]), Math.max(currentValue.high, accumulator[1])];
+            },
+            [Number.MAX_VALUE, Number.MIN_VALUE]
+        );
+        var lowval = minMax[0];
+        var highval = minMax[1];
+        for (var i = 0, len = candles.length; i < len; i++) {
             if (val1.length === 0) {
                 val1[i] = 0.66 * ((x - lowval) / Math.max(highval - lowval, 0.001) - 0.5) + 0.67 * 0;
             } else {
@@ -175,14 +172,13 @@ module.exports = class FisherMultiPack {
     }
 
     ifishrsi(indicatorPeriod, options) {
-        var rsi = indicatorPeriod.getIndicator('rsi');
-        var rsiv = [];
-        for (var i = rsi.length - 1; i >= rsi.length - options.timeperiod * 2; i--) {
-            rsiv[i] = options.alpha * (rsi[i] - 50);
+        var rsiv = [], i = 0;
+        for (const value of indicatorPeriod.visitLatestIndicators(options.timeperiod + 1)) {
+            rsiv[i] = options.alpha * (value.rsi - 50);
+            i++;
         }
-        rsiv = rsiv.filter(Boolean);
 
-        var wmarv = this.wma(rsiv, options.timeperiod);
+        var wmarv = this.wma(rsiv.reverse(), options.timeperiod);
         var ifishrsi = [];
         for (var i = 0, len = wmarv.length; i < len; i++) {
             ifishrsi[i] = (Math.exp(2 * wmarv[i]) - 1) / (Math.exp(2 * wmarv[i]) + 1)
@@ -191,18 +187,33 @@ module.exports = class FisherMultiPack {
     }
 
     ifishstoch(indicatorPeriod, options) {
-        var stochFull = indicatorPeriod.getIndicator('stoch'), stoch = [];
-        for (var i = stochFull.length - 1; i >= stochFull.length - options.timeperiod; i--) {
-            stoch[i] = options.alpha * (stochFull[i].stoch_k - 50);
+        var stoch = [], i = 0;
+        for (const value of indicatorPeriod.visitLatestIndicators(options.timeperiod + 1)) {
+            stoch[i] = options.alpha * (value.stoch.stoch_k - 50);
+            i++;
         }
-        stoch = stoch.filter(Boolean);
-        var wmasv = this.wma(stoch, options.timeperiod);
+        var wmasv = this.wma(stoch.reverse(), options.timeperiod);
 
         var ifishstoch = [];
         for (var i = 0, len = wmasv.length; i < len; i++) {
             ifishstoch[i] = (Math.exp(2 * wmasv[i]) - 1) / (Math.exp(2 * wmasv[i]) + 1)
         }
         return ifishstoch;
+    }
+
+    ifishcci(indicatorPeriod, options) {
+        var cciv = [], i = 0;
+        for (const value of indicatorPeriod.visitLatestIndicators(options.timeperiod + 1)) {
+            cciv[i] = options.alpha * (value.cci - 50);
+            i++;
+        }
+
+        var wmarv = this.wma(cciv.reverse(), options.timeperiod);
+        var ifishcci = [];
+        for (var i = 0, len = wmarv.length; i < len; i++) {
+            ifishcci[i] = (Math.exp(2 * wmarv[i]) - 1) / (Math.exp(2 * wmarv[i]) + 1)
+        }
+        return ifishcci;
     }
 
     cmean(indicatorPeriod, x) {
@@ -218,21 +229,21 @@ module.exports = class FisherMultiPack {
         return indicatorPeriod.getStrategyContext().options.xsum / indicatorPeriod.getStrategyContext().options.tsum;
     }
 
-    wma(data, len) {
-        var length = (!len) ? 14 : len, weight = 0, wma = [];
-        for (var i = 1; i <= length; i++) weight += i;
-        for (var i = length; i <= data.length; i++) {
-            var pl = data.slice(i - length, i), average = 0;
-            for (var q in pl) average += pl[q] * (Number(q) + 1) / weight;
-            wma.push(average);
-        }
-        return wma;
+    wma(values, length) {
+        var wma = talib.execute({
+            name: "WMA",
+            startIdx: 0,
+            endIdx: values.length - 1,
+            inReal: values,
+            optInTimePeriod: length
+        });
+
+        return wma.result.outReal;
     }
 
 
-    ema(values, period) {
-
-        var k = 2 / (period + 1);
+    ema(values, length) {
+        var k = 2 / (length + 1);
         var emaArray = [values[0]];
         for (var i = 1; i < values.length; i++) {
             emaArray.push((values[i] - emaArray[i - 1]) * k + emaArray[i - 1]);
@@ -256,6 +267,28 @@ module.exports = class FisherMultiPack {
             }
         }
         return high;
+    }
+
+    highest(array, length) {
+        var highest = talib.execute({
+            name: "MAX",
+            startIdx: 0,
+            endIdx: length,
+            inReal: array,
+            optInTimePeriod: length
+        });
+        return highest.result.outReal[0];
+    }
+
+    lowest(array, length) {
+        var lowest = talib.execute({
+            name: "MIN",
+            startIdx: 0,
+            endIdx: length,
+            inReal: array,
+            optInTimePeriod: length
+        });
+        return lowest.result.outReal[0];
     }
 
     calcTrailingStopLoss(indicatorPeriod, options, lastSignal, debug) {
@@ -381,7 +414,7 @@ module.exports = class FisherMultiPack {
     getOptions() {
         return {
             period: '15m',
-            oscillator_type: 3,
+            oscillator_type: 2,
             timeperiod: 13,
             alpha: 0.1,
             only_long: 1,
