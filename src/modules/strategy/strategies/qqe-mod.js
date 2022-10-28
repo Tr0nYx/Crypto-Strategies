@@ -127,6 +127,8 @@ module.exports = class QQE_Mod {
 		var longband2 = 0;
 		var shortband2 = 0;
 		//var trend2 = 0;
+
+		var RSIndex2 = RsiMa2;
 		var newshortband2 = RSIndex2[RSIndex2.length - 1] + DeltaFastAtrRsi2;
 		var newlongband2 = RSIndex2[RSIndex2.length - 1] - DeltaFastAtrRsi2;
 		if (RSIndex2[RSIndex2.length - 2] > indicatorPeriod.getStrategyContext().options.longband2 && RSIndex2[RSIndex2.length - 1] > indicatorPeriod.getStrategyContext().options.longband2){
@@ -154,7 +156,7 @@ module.exports = class QQE_Mod {
 			}
 		}
 
-		var FastAtrRsi2TL = trend2[trend2.length - 1] === 1 ? longband2 : shortband2;
+		var FastAtrRsi2TL = trend2[trend2.length - 1] == 1 ? longband2 : shortband2;
 
 		indicatorPeriod.getStrategyContext().options.longband2 = longband2;
 		indicatorPeriod.getStrategyContext().options.shortband2 = shortband2;
@@ -174,17 +176,31 @@ module.exports = class QQE_Mod {
 		debug.signalLine = signalLine;
 		indicatorPeriod.getStrategyContext().options.trend = trend;
 		indicatorPeriod.getStrategyContext().options.trend2 = trend2;
+
+		/** Calc Trailing StopLoss START */
+		if (options.useTrailingTakeProfit == 1){
+			var slsignal = this.calcTrailingStopLoss(indicatorPeriod, options, lastSignal, debug);
+			if (slsignal === 'close') {
+				indicatorPeriod.getStrategyContext().options.sl = 0;
+				indicatorPeriod.getStrategyContext().options.high_watermark = 0;
+				return SignalResult.createSignal('close', debug);
+			}
+		}
+		var atr = indicatorPeriod.getLatestIndicator('atr');
+		/** Calc Trailing StopLoss END */
 		if (!lastSignal && color === '#00c3ff'){
+			indicatorPeriod.getStrategyContext().options.sl = indicatorPeriod.getPrice() - (atr[atr.length - 1] * options.stoplossatrfactor);
 			return SignalResult.createSignal('long', debug);
 		}
 		if (!lastSignal && color === '#ff0062' && options.only_long === 0){
+			indicatorPeriod.getStrategyContext().options.sl = indicatorPeriod.getPrice() + (atr[atr.length - 1] * options.stoplossatrfactor);
 			return SignalResult.createSignal('short', debug);
 		}
 		if (lastSignal){
-			if (lastSignal === 'long' && (color === '#ff0062' || color === '#f3f3f3')){
+			if (lastSignal === 'long' && (color === '#ff0062' || (options.exitongrey == 1 && color === '#f3f3f3'))){
 				return SignalResult.createSignal('close', debug);
 			}
-			if (lastSignal === 'short' && (color === '#00c3ff' || color === '#f3f3f3')){
+			if (lastSignal === 'short' && (color === '#00c3ff' || (options.exitongrey == 1 && color === '#f3f3f3'))){
 				return SignalResult.createSignal('close', debug);
 			}
 		}
@@ -223,6 +239,71 @@ module.exports = class QQE_Mod {
 			emaArray.push((values[i] - emaArray[i - 1]) * k + emaArray[i - 1]);
 		}
 		return emaArray;
+	}
+
+	calcTrailingStopLoss(indicatorPeriod, options, lastSignal, debug) {
+		var sl = 0;
+		this.profit = indicatorPeriod.getStrategyContext().getProfit();
+		const price = indicatorPeriod.getPrice();
+		if (!indicatorPeriod.getStrategyContext().options.high_watermark) {
+			indicatorPeriod.getStrategyContext().options.high_watermark = 0;
+		}
+		if (!indicatorPeriod.getStrategyContext().options.sl) {
+			indicatorPeriod.getStrategyContext().options.sl = 0;
+		}
+		if (this.profit > options.trailingstopenable &&
+			(!indicatorPeriod.getStrategyContext().options.high_watermark || indicatorPeriod.getStrategyContext().options.high_watermark === 0)) {
+			indicatorPeriod.getStrategyContext().options.high_watermark = this.profit;
+		}
+		if (this.profit > indicatorPeriod.getStrategyContext().options.high_watermark && indicatorPeriod.getStrategyContext().options.high_watermark > 0) {
+			indicatorPeriod.getStrategyContext().options.high_watermark = this.profit;
+		}
+		this.watermark = indicatorPeriod.getStrategyContext().options.high_watermark;
+		this.trigger = parseFloat(this.watermark) - options.trailingstoppercent;
+		if (lastSignal && options.stoplossatr === 1 && options.trailingstoplossatr === 1) {
+			var atr = indicatorPeriod.getIndicator('atr');
+			if (lastSignal === 'long' && indicatorPeriod.getPrice() > indicatorPeriod.getStrategyContext().options.sl) {
+				sl = indicatorPeriod.getPrice() - (atr[atr.length - 1] * options.stoplossatrfactor);
+				if (sl > indicatorPeriod.getStrategyContext().options.sl) {
+					indicatorPeriod.getStrategyContext().options.sl = sl;
+				}
+			}
+			if (lastSignal === 'short' && indicatorPeriod.getPrice() < indicatorPeriod.getStrategyContext().options.sl) {
+				sl = indicatorPeriod.getPrice() + (atr[atr.length - 1] * options.stoplossatrfactor);
+				if (sl < indicatorPeriod.getStrategyContext().options.sl) {
+					indicatorPeriod.getStrategyContext().options.sl = sl;
+				}
+			}
+		}
+		debug.watermark = this.watermark;
+		debug.trigger = this.trigger;
+		debug.stoploss = indicatorPeriod.getStrategyContext().options.sl;
+		if (options.stoplossatr === 1) {
+			if (lastSignal === 'long' && price < indicatorPeriod.getStrategyContext().options.sl) {
+				debug._trigger = "profit below atr stoploss";
+				indicatorPeriod.getStrategyContext().options.sl = 0;
+				indicatorPeriod.getStrategyContext().options.high_watermark = 0;
+				return 'close';
+			}
+			if (lastSignal === 'short' && price > indicatorPeriod.getStrategyContext().options.sl) {
+				debug._trigger = "profit above atr stoploss";
+				indicatorPeriod.getStrategyContext().options.sl = 0;
+				indicatorPeriod.getStrategyContext().options.high_watermark = 0;
+				return 'close';
+			}
+		}
+		if (lastSignal && (this.profit < options.stoplosspercent * -1)) {
+			indicatorPeriod.getStrategyContext().options.sl = 0;
+			indicatorPeriod.getStrategyContext().options.high_watermark = 0;
+			debug._trigger = "profit below stoplosspercent";
+			return 'close';
+		}
+		if (lastSignal && indicatorPeriod.getStrategyContext().getProfit() < this.trigger) {
+			indicatorPeriod.getStrategyContext().options.sl = 0;
+			indicatorPeriod.getStrategyContext().options.high_watermark = 0;
+			debug._trigger = "profit below trigger";
+			return 'close';
+		}
 	}
 
 	getBacktestColumns() {
@@ -275,8 +356,20 @@ module.exports = class QQE_Mod {
 				type: 'color'
 			},
 			{
-				label: 'trigger',
+				label: 'atr stoploss',
+				value: 'stoploss'
+			},
+			{
+				label: 'watermark',
+				value: 'watermark'
+			},
+			{
+				label: 'Order Reason',
 				value: '_trigger'
+			},
+			{
+				label: 'trigger',
+				value: 'trigger'
 			}
 		];
 	}
@@ -294,9 +387,13 @@ module.exports = class QQE_Mod {
 			threshhold2: 3,
 			bollinger_length: 50,
 			bollinger_mult: 0.35,
-			useTrailingTakeProfit: 1,
+			exitongrey: 0,
+			useTrailingTakeProfit: 0,
 			stoplossatrfactor: 1.5,
 			takeprofitatrfactor: 3,
+			stoplosspercent: 2,
+			trailingstopenable: 3,
+			trailingstoppercent: 1
 		};
 	}
 }
