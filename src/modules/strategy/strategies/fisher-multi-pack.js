@@ -27,7 +27,7 @@ module.exports = class FisherMultiPack {
         var stoch = indicatorPeriod.getLatestIndicator('stoch');
         var atr = indicatorPeriod.getLatestIndicator('atr');
         var cci = indicatorPeriod.getLatestIndicator('cci');
-        var signal = 'none';
+		var signal = 'none';
         const debug = {
             rsi: 0
         }
@@ -113,12 +113,14 @@ module.exports = class FisherMultiPack {
             debug.trend = 'down';
         }
         /** Calc Trailing StopLoss START */
-        var slsignal = this.calcTrailingStopLoss(indicatorPeriod, options, lastSignal, debug);
-        if (slsignal === 'close') {
-            indicatorPeriod.getStrategyContext().options.sl = 0;
-            indicatorPeriod.getStrategyContext().options.high_watermark = 0;
-            return SignalResult.createSignal('close', debug);
-        }
+		if (options.useTrailingTakeProfit == 1){
+			var slsignal = this.calcTrailingStopLoss(indicatorPeriod, options, lastSignal, debug);
+			if (slsignal === 'close') {
+				indicatorPeriod.getStrategyContext().options.sl = 0;
+				indicatorPeriod.getStrategyContext().options.high_watermark = 0;
+				return SignalResult.createSignal('close', debug);
+			}
+		}
         /** Calc Trailing StopLoss END */
         indicatorPeriod.getStrategyContext().options.oscillator = oscillator_ema;
         if (signal === 'long') {
@@ -189,9 +191,9 @@ module.exports = class FisherMultiPack {
     ifishstoch(indicatorPeriod, options) {
         var stoch = [], i = 0;
         for (const value of indicatorPeriod.visitLatestIndicators(options.timeperiod + 1)) {
-            if (typeof value.stoch !== 'undefined') {
-                stoch[i] = options.alpha * (value.stoch.stoch_k - 50);
-            }
+			if (typeof value.stoch !== 'undefined'){
+				stoch[i] = options.alpha * (value.stoch.stoch_k - 50);
+			}
             i++;
         }
         var wmasv = this.wma(stoch.reverse(), options.timeperiod);
@@ -232,15 +234,15 @@ module.exports = class FisherMultiPack {
     }
 
     wma(values, length) {
-        var sum = 0;
-        var weightedArray = [];
-        for (var i = 0; i <= values.length - length; i++) {
-            for (var j = 0; j < length; j++) {
-                sum += values[i + j] * (length - j);
-            }
-            weightedArray[i] = sum / ((length * (length + 1)) / 2);
-        }
-        return weightedArray;
+		var sum = 0;
+		var weightedArray = [];
+		for( var i = 0; i <= values.length - length; i++ ) {
+			for( var j = 0; j < length; j++ ) {
+				sum += values[ i + j ] * ( length - j );
+			}
+			weightedArray[i] = sum / (( length * ( length + 1 )) / 2 );
+		}
+		return weightedArray;
     }
 
 
@@ -415,13 +417,14 @@ module.exports = class FisherMultiPack {
 
     getOptions() {
         return {
-            period: '15m',
+            period: '1h',
             oscillator_type: 2,
             timeperiod: 13,
             alpha: 0.1,
             only_long: 1,
             ema_smoothing: 1,
             multKC: 1.5,
+			useTrailingTakeProfit: 0,
             onlystoploss: 0,
             stoplossatr: 1,
             trailingstoplossatr: 1,
