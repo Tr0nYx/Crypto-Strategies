@@ -14,19 +14,23 @@ module.exports = class QQE_Mod {
 			throw Error('Invalid period');
 		}
 		indicatorBuilder.add('rsi', 'rsi', options.period, {'length': options.rsi_length});
+		indicatorBuilder.add('rsi2', 'rsi', options.period, {'length': options.rsi_length2});
 		// ATR for Stoploss
 		indicatorBuilder.add('atr', 'atr', options.period);
 		// ATR for Stoploss
 	}
 
 	period(indicatorPeriod, options) {
-		var longband = [], shortband = [], FastAtrRsiTL = 0;
+		var longband = 0, shortband = 0, FastAtrRsiTL = 0;
 		var color = '#f3f3f3';
 		if (!indicatorPeriod.getStrategyContext().options.FastAtrRsiTL){
 			indicatorPeriod.getStrategyContext().options.FastAtrRsiTL = [];
 		}
 		if (!indicatorPeriod.getStrategyContext().options.trend){
 			indicatorPeriod.getStrategyContext().options.trend = [0];
+		}
+		if (!indicatorPeriod.getStrategyContext().options.trend2){
+			indicatorPeriod.getStrategyContext().options.trend2 = [0];
 		}
 		const lastSignal = indicatorPeriod.getLastSignal();
 		var rsiFull = indicatorPeriod.getIndicator('rsi').slice(options.rsi_length * - 1);
@@ -43,24 +47,24 @@ module.exports = class QQE_Mod {
 		dar = dar.reverse();
 		var DeltaFastAtrRsi = dar[dar.length - 1] * options.qqe_factor;
 		var RSIndex = RsiMa;
+
 		var newshortband = RSIndex[RSIndex.length - 1] + DeltaFastAtrRsi;
 		var newlongband = RSIndex[RSIndex.length - 1] - DeltaFastAtrRsi;
 		if (RSIndex[RSIndex.length - 2] > indicatorPeriod.getStrategyContext().options.longband && RSIndex[RSIndex.length - 1] > indicatorPeriod.getStrategyContext().options.longband){
-			longband.push(Math.max(indicatorPeriod.getStrategyContext().options.longband, newlongband));
+			longband = Math.max(indicatorPeriod.getStrategyContext().options.longband, newlongband);
 		} else {
-			longband.push(newlongband);
+			longband = newlongband;
 		}
 		if (RSIndex[RSIndex.length - 2] < indicatorPeriod.getStrategyContext().options.shortband && RSIndex[RSIndex.length - 1] < indicatorPeriod.getStrategyContext().options.shortband) {
-			shortband.push(Math.max(indicatorPeriod.getStrategyContext().options.shortband, newshortband));
+			shortband = Math.min(indicatorPeriod.getStrategyContext().options.shortband, newshortband);
 		} else {
-			shortband.push(newshortband);
+			shortband = newshortband;
 		}
 
 		var cross_1 = indicatorPeriod.getStrategyContext().options.longband < RSIndex[RSIndex.length - 1] && longband > RSIndex[RSIndex.length - 1];
-		var cross_2 = RSIndex[RSIndex.length - 1] < indicatorPeriod.getStrategyContext().options.shortband && RSIndex[RSIndex.length - 1] > shortband;
-
+		var trend_cross = RSIndex[RSIndex.length - 1] < indicatorPeriod.getStrategyContext().options.shortband && RSIndex[RSIndex.length - 1] > shortband;
 		var trend = indicatorPeriod.getStrategyContext().options.trend;
-		if (cross_2 === true){
+		if (trend_cross === true){
 			trend.push(1);
 		} else {
 			if (cross_1 === true){
@@ -70,14 +74,17 @@ module.exports = class QQE_Mod {
 			}
 		}
 		var val;
+
 		if (trend[trend.length - 1] === 1){
-			val = longband[longband.length - 1] - 50;
+			val = longband - 50;
 			indicatorPeriod.getStrategyContext().options.FastAtrRsiTL.push(val);
 		} else {
-			val = shortband[shortband.length - 1] - 50;
+			val = shortband - 50;
 			indicatorPeriod.getStrategyContext().options.FastAtrRsiTL.push(val);
 		}
 		FastAtrRsiTL = indicatorPeriod.getStrategyContext().options.FastAtrRsiTL;
+		indicatorPeriod.getStrategyContext().options.longband = longband;
+		indicatorPeriod.getStrategyContext().options.shortband = shortband;
 		const debug = {
 			dar: DeltaFastAtrRsi,
 			shortband: shortband,
@@ -98,15 +105,75 @@ module.exports = class QQE_Mod {
 		}
 		debug.upper = upper;
 		debug.lower = lower;
-		var signalLine = RsiMa[RsiMa.length - 1] - 50;
-		if (signalLine > upper && signalLine > options.threshhold){
+
+		// QQE2
+		Wilders_Period2 = options.rsi_length2 * 2 - 1
+
+		var rsi2Full = indicatorPeriod.getIndicator('rsi2').slice(options.rsi_length2 * - 1);
+		var rsi2 = rsi2Full[rsi2Full.length - 1];
+		var Wilders_Period2 = options.rsi_length2 * 2 - 1;
+		var RsiMa2 = this.ema(rsi2Full.reverse(), options.rsi_smoothing_length2);
+		var AtrRsi2 = [];
+		for (var i = 0, len = Wilders_Period2; i < len; i++) {
+			AtrRsi2[i] = Math.abs(RsiMa2[i - 1] - RsiMa2[i]);
+		}
+		AtrRsi2 = AtrRsi2.filter(Boolean);
+		var MaAtrRsi2 = this.ema(AtrRsi2, Wilders_Period2);
+		var dar2 = this.ema(MaAtrRsi2, Wilders_Period2);
+		dar2 = dar2.reverse();
+		var DeltaFastAtrRsi2 = dar2[dar2.length - 1] * options.qqe_factor2;
+		var RSIndex2 = RsiMa2;
+
+		var longband2 = 0;
+		var shortband2 = 0;
+		//var trend2 = 0;
+		var newshortband2 = RSIndex2[RSIndex2.length - 1] + DeltaFastAtrRsi2;
+		var newlongband2 = RSIndex2[RSIndex2.length - 1] - DeltaFastAtrRsi2;
+		if (RSIndex2[RSIndex2.length - 2] > indicatorPeriod.getStrategyContext().options.longband2 && RSIndex2[RSIndex2.length - 1] > indicatorPeriod.getStrategyContext().options.longband2){
+			longband2 = Math.max(indicatorPeriod.getStrategyContext().options.longband2, newlongband2);
+		} else {
+			longband2 = newlongband2;
+		}
+		if (RSIndex2[RSIndex2.length - 2] < indicatorPeriod.getStrategyContext().options.shortband2 && RSIndex2[RSIndex2.length - 1] < indicatorPeriod.getStrategyContext().options.shortband2) {
+			shortband2 = Math.min(indicatorPeriod.getStrategyContext().options.shortband2, newshortband2);
+		} else {
+			shortband2 = newshortband2;
+		}
+
+		var cross_2 = indicatorPeriod.getStrategyContext().options.longband2 < RSIndex2[RSIndex2.length - 1] && longband2 > RSIndex2[RSIndex2.length - 1];
+		var trend2_cross = RSIndex2[RSIndex2.length - 1] < indicatorPeriod.getStrategyContext().options.shortband2 && RSIndex2[RSIndex2.length - 1] > shortband2;
+
+		var trend2 = indicatorPeriod.getStrategyContext().options.trend2;
+		if (trend2_cross === true){
+			trend2.push(1);
+		} else {
+			if (cross_2 === true){
+				trend2.push(-1);
+			} else {
+				trend2.push(trend2[trend2.length - 1]);
+			}
+		}
+
+		var FastAtrRsi2TL = trend2[trend2.length - 1] === 1 ? longband2 : shortband2;
+
+		indicatorPeriod.getStrategyContext().options.longband2 = longband2;
+		indicatorPeriod.getStrategyContext().options.shortband2 = shortband2;
+
+		var signalLine = FastAtrRsi2TL - 50;
+		var Greenbar1 = RsiMa2[RsiMa2.length - 1] - 50 > options.threshhold2
+		var Greenbar2 = RsiMa[RsiMa.length - 1] - 50 > upper
+
+		var Redbar1 = RsiMa2[RsiMa2.length - 1] - 50 < 0 - options.threshhold2
+		var Redbar2 = RsiMa[RsiMa.length - 1] - 50 < lower
+		if (Greenbar1 && Greenbar2){
 			color = '#00c3ff';
-		} else if (signalLine < lower && signalLine - options.threshhold){
+		} else if (Redbar1 && Redbar2){
 			color = '#ff0062';
 		}
 		debug.color = color;
 		debug.signalLine = signalLine;
 		indicatorPeriod.getStrategyContext().options.trend = trend;
+		indicatorPeriod.getStrategyContext().options.trend2 = trend2;
 		if (!lastSignal && color === '#00c3ff'){
 			return SignalResult.createSignal('long', debug);
 		}
@@ -221,6 +288,10 @@ module.exports = class QQE_Mod {
 			rsi_smoothing_length: 5,
 			qqe_factor: 1.61,
 			threshhold: 3,
+			rsi_length2: 6,
+			rsi_smoothing_length2: 5,
+			qqe_factor2: 1.61,
+			threshhold2: 3,
 			bollinger_length: 50,
 			bollinger_mult: 0.35,
 			useTrailingTakeProfit: 1,
