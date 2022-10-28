@@ -27,6 +27,10 @@ module.exports = class FisherMultiPack {
         var stoch = indicatorPeriod.getLatestIndicator('stoch');
         var atr = indicatorPeriod.getLatestIndicator('atr');
         var cci = indicatorPeriod.getLatestIndicator('cci');
+        var signal = 'none';
+        const debug = {
+            rsi: 0
+        }
         if (!indicatorPeriod.getStrategyContext().options.oscillator) {
             indicatorPeriod.getStrategyContext().options.oscillator = 0;
         }
@@ -40,10 +44,6 @@ module.exports = class FisherMultiPack {
             return SignalResult.createEmptySignal(debug);
         }
 
-        var signal = 'none';
-        const debug = {
-            rsi: 0
-        }
         var oscillator;
         if (options.oscillator_type === 1) {
             oscillator = this.fish(indicatorPeriod, options, debug);
@@ -189,7 +189,9 @@ module.exports = class FisherMultiPack {
     ifishstoch(indicatorPeriod, options) {
         var stoch = [], i = 0;
         for (const value of indicatorPeriod.visitLatestIndicators(options.timeperiod + 1)) {
-            stoch[i] = options.alpha * (value.stoch.stoch_k - 50);
+            if (typeof value.stoch !== 'undefined') {
+                stoch[i] = options.alpha * (value.stoch.stoch_k - 50);
+            }
             i++;
         }
         var wmasv = this.wma(stoch.reverse(), options.timeperiod);
@@ -230,15 +232,15 @@ module.exports = class FisherMultiPack {
     }
 
     wma(values, length) {
-        var wma = talib.execute({
-            name: "WMA",
-            startIdx: 0,
-            endIdx: values.length - 1,
-            inReal: values,
-            optInTimePeriod: length
-        });
-
-        return wma.result.outReal;
+        var sum = 0;
+        var weightedArray = [];
+        for (var i = 0; i <= values.length - length; i++) {
+            for (var j = 0; j < length; j++) {
+                sum += values[i + j] * (length - j);
+            }
+            weightedArray[i] = sum / ((length * (length + 1)) / 2);
+        }
+        return weightedArray;
     }
 
 
