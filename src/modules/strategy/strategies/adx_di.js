@@ -72,8 +72,8 @@ module.exports = class ADX_DI {
             'lastSignal': lastSignal
         }
         if (DIPlus > DIMinus) {
+            debug.trend = 'up';
             if (ADX[ADX.length - 1] < options.adx_signal) {
-                debug.trend = 'up';
                 if (!lastSignal) {
                     return SignalResult.createSignal('long', debug);
                 }
@@ -83,8 +83,8 @@ module.exports = class ADX_DI {
             }
         }
         if (DIMinus > DIPlus) {
+            debug.trend = 'down';
             if (ADX[ADX.length - 1] < options.adx_signal) {
-                debug.trend = 'down';
                 if (!lastSignal) {
                     return SignalResult.createSignal('short', debug);
                 }

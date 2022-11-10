@@ -34,11 +34,14 @@ module.exports = class Squeeze {
         }
         const lastSignal = indicatorPeriod.getLastSignal();
         var mid = ema;
-        var upperKC = mid + (options.multKC * atr);
-        var lowerKC = mid - (options.multKC * atr);
+        var prevcandle = lastCandles.slice(-2)[0];
+
+        var TrueRange = Math.max(Math.max(candle.high - candle.low, Math.abs(candle.high - prevcandle.close)), Math.abs(candle.low - prevcandle.close));
+        var upperKC = mid + (options.multKC * TrueRange);
+        var lowerKC = mid - (options.multKC * TrueRange);
         var sqzOn = (bbands.lower > lowerKC) && (bbands.upper < upperKC)
         var sqzOff = (bbands.lower < lowerKC) && (bbands.upper > upperKC)
-        var noSqz  = (sqzOn === false) && (sqzOff === false)
+        var noSqz = (sqzOn === false) && (sqzOff === false)
         for (var i = 0, len = lastCandles.length; i < len; i++) {
             highs[i] = lastCandles[i].high;
             lows[i] = lastCandles[i].low;
@@ -50,8 +53,7 @@ module.exports = class Squeeze {
         var emaAvg = (hlavg + ema) / 2;
         emaAvg = candle.close - emaAvg;
         const debug = {
-            color: '#cccccc',
-            squeeze: sqzOn
+            color: '#cccccc'
         };
         indicatorPeriod.getStrategyContext().options.emaAvg.push(emaAvg);
         if (indicatorPeriod.getStrategyContext().options.emaAvg.length < options.length) {
@@ -64,13 +66,12 @@ module.exports = class Squeeze {
         debug.linReg = linReg;
         debug.emaAvg = indicatorPeriod.getStrategyContext().options.linReg;
         if (linReg > 0) {
-            if (linReg > indicatorPeriod.getStrategyContext().options.linReg && sqzOn) {
+            if (linReg > indicatorPeriod.getStrategyContext().options.linReg) {
                 debug.color = '#05ffa6';
                 signal = 'long';
             } else {
                 debug.color = '#00945f';
-                if (sqzOff)
-                    signal = 'close';
+                signal = 'close';
             }
         } else {
             if (linReg < indicatorPeriod.getStrategyContext().options.linReg) {
@@ -81,33 +82,36 @@ module.exports = class Squeeze {
                 signal = 'close';
             }
         }
-
+        debug.scolor = noSqz ? '#4f46e5' : sqzOn ? '#000000' : '#BDBDBD';
+        indicatorPeriod.getStrategyContext().options.linReg = linReg;
         /** Calc Trailing StopLoss START */
-        var slsignal = this.calcTrailingStopLoss(indicatorPeriod, options, lastSignal, debug);
-        if (slsignal === 'close') {
-            indicatorPeriod.getStrategyContext().options.sl = 0;
-            indicatorPeriod.getStrategyContext().options.high_watermark = 0;
-            return SignalResult.createSignal('close', debug);
+        if (options.stoploss === 1) {
+            var slsignal = this.calcTrailingStopLoss(indicatorPeriod, options, lastSignal, debug);
+            if (slsignal === 'close') {
+                indicatorPeriod.getStrategyContext().options.sl = 0;
+                indicatorPeriod.getStrategyContext().options.high_watermark = 0;
+                return SignalResult.createSignal('close', debug);
+            }
         }
         /** Calc Trailing StopLoss END */
 
-        if (signal === 'close' && lastSignal) {
+        if (signal === 'close' && lastSignal && !sqzOn) {
             indicatorPeriod.getStrategyContext().options.sl = 0;
             indicatorPeriod.getStrategyContext().options.high_watermark = 0;
             return SignalResult.createSignal('close', debug);
         }
         if (!lastSignal && signal !== 'close') {
-            if (signal === 'long') {
+            if (signal === 'long' && sqzOn) {
                 indicatorPeriod.getStrategyContext().options.sl = indicatorPeriod.getPrice() - (atr[atr.length - 1] * options.stoplossatrfactor);
                 return SignalResult.createSignal('long', debug);
             }
-            if (signal === 'short' && options.only_long === 0) {
+            if (signal === 'short' && sqzOn && options.only_long === 0) {
                 indicatorPeriod.getStrategyContext().options.sl = indicatorPeriod.getPrice() + (atr[atr.length - 1] * options.stoplossatrfactor);
                 return SignalResult.createSignal('short', debug);
             }
 
         }
-        indicatorPeriod.getStrategyContext().options.linReg = linReg;
+
         return SignalResult.createEmptySignal(debug);
     }
 
@@ -212,7 +216,7 @@ module.exports = class Squeeze {
     getBacktestColumns() {
         return [
             {
-                label: 'color',
+                label: 'histogram',
                 value: 'color',
                 type: 'color'
             },
@@ -227,6 +231,11 @@ module.exports = class Squeeze {
             {
                 label: 'atr stoploss',
                 value: 'stoploss'
+            },
+            {
+                label: 'squeeze',
+                value: 'scolor',
+                type: 'color'
             },
             {
                 label: 'watermark',
@@ -245,13 +254,14 @@ module.exports = class Squeeze {
 
     getOptions() {
         return {
-            period: '15m',
+            period: '1h',
             length: 20,
             mult: 2.0,
             lengthKC: 20,
             multKC: 1.5,
             useTrueRange: 1,
             only_long: 1,
+            stoploss: 0,
             onlystoploss: 0,
             stoplossatr: 1,
             trailingstoplossatr: 1,

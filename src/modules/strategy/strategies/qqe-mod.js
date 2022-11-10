@@ -39,7 +39,7 @@ module.exports = class QQE_Mod {
             indicatorPeriod.getStrategyContext().options.shortband = [0];
         }
         const lastSignal = indicatorPeriod.getLastSignal();
-        var rsiFull = indicatorPeriod.getIndicator('rsi').slice(options.rsi_length * -1);
+        var rsiFull = indicatorPeriod.getIndicator('rsi');
         if (rsiFull.length < options.rsi_length) {
             return SignalResult.createEmptySignal();
         }
@@ -123,7 +123,7 @@ module.exports = class QQE_Mod {
         // QQE2
         Wilders_Period2 = options.rsi_length2 * 2 - 1
 
-        var rsi2Full = indicatorPeriod.getIndicator('rsi2').slice(options.rsi_length2 * -1);
+        var rsi2Full = indicatorPeriod.getIndicator('rsi2');
         var rsi2 = rsi2Full[rsi2Full.length - 1];
         var Wilders_Period2 = options.rsi_length2 * 2 - 1;
         var RsiMa2 = this.ema(rsi2Full, options.rsi_smoothing_length2);
@@ -169,7 +169,7 @@ module.exports = class QQE_Mod {
             }
         }
 
-        var FastAtrRsi2TL = trend2[trend2.length - 1] == 1 ? longband2 : shortband2;
+        var FastAtrRsi2TL = trend2[trend2.length - 1] === 1 ? longband2 : shortband2;
 
         indicatorPeriod.getStrategyContext().options.longband2 = longband2;
         indicatorPeriod.getStrategyContext().options.shortband2 = shortband2;
@@ -192,7 +192,7 @@ module.exports = class QQE_Mod {
         indicatorPeriod.getStrategyContext().options.trend2 = trend2;
 
         /** Calc Trailing StopLoss START */
-        if (options.useSLTP == 1) {
+        if (options.useSLTP === 1) {
             var slsignal = this.calcTrailingStopLoss(indicatorPeriod, options, lastSignal, debug);
             if (slsignal === 'close') {
                 indicatorPeriod.getStrategyContext().options.sl = 0;
@@ -211,12 +211,12 @@ module.exports = class QQE_Mod {
             return SignalResult.createSignal('short', debug);
         }
         if (lastSignal) {
-            if (lastSignal === 'long' && (color === '#ff0062' || (options.exitongrey == 1 && color === '#f3f3f3'))) {
+            if (lastSignal === 'long' && (color === '#ff0062' || (options.exitongrey === 1 && color === '#f3f3f3'))) {
                 indicatorPeriod.getStrategyContext().options.sl = 0;
                 indicatorPeriod.getStrategyContext().options.high_watermark = 0;
                 return SignalResult.createSignal('close', debug);
             }
-            if (lastSignal === 'short' && (color === '#00c3ff' || (options.exitongrey == 1 && color === '#f3f3f3'))) {
+            if (lastSignal === 'short' && (color === '#00c3ff' || (options.exitongrey === 1 && color === '#f3f3f3'))) {
                 indicatorPeriod.getStrategyContext().options.sl = 0;
                 indicatorPeriod.getStrategyContext().options.high_watermark = 0;
                 return SignalResult.createSignal('close', debug);
