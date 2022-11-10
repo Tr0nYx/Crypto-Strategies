@@ -1,21 +1,3 @@
-// Just a little Test
-/*
-Backtesting Results - SpringSupport - 15m
-ETHUSDT Summary - 22-10-25 01:00:00 - 22-11-10 16:45:00
-Average Return Per Trade	0.28 %
-Net Return on Investment	27.08 %
-Total Number of Trades	89
-Number of Winning Trades	43
-Percentage of Winning Trades	48.31
---------------------------------------------------------
-Backtesting Results - SpringSupport - 1h
-ETHUSDT Summary - 22-10-25 01:00:00 - 22-11-10 16:00:00
-Average Return Per Trade	2.29 %
-Net Return on Investment	22.7 %
-Total Number of Trades	10
-Number of Winning Trades	5
-Percentage of Winning Trades	50
- */
 const SignalResult = require('../dict/signal_result');
 
 module.exports = class SpringSupport {
@@ -49,6 +31,7 @@ module.exports = class SpringSupport {
         var low = lows.slice(-3);
         const average_high = high.reduce((a, b) => a + b, 0) / high.length;
         const average_low = low.reduce((a, b) => a + b, 0) / low.length;
+        //console.log(average_low);
         const lastSignal = indicatorPeriod.getLastSignal();
 
         const debug = {
@@ -58,7 +41,7 @@ module.exports = class SpringSupport {
         }
 
         /** Calc Trailing StopLoss START */
-        if (options.useSLTP === 1) {
+        if (options.useSLTP == 1) {
             var slsignal = this.calcSLTP(indicatorPeriod, options, lastSignal, debug);
             if (slsignal === 'close') {
                 indicatorPeriod.getStrategyContext().options.sl = 0;
@@ -124,7 +107,6 @@ module.exports = class SpringSupport {
                     indicatorPeriod.getStrategyContext().options.sl = sl;
                 }
             }
-            console.log(price < indicatorPeriod.getStrategyContext().options.sl);
             if (lastSignal === 'short' && price < indicatorPeriod.getStrategyContext().options.sl) {
                 if (options.useTrailingTP === 1) {
                     sl = price + slvalue;
@@ -142,13 +124,13 @@ module.exports = class SpringSupport {
         debug.stoploss = indicatorPeriod.getStrategyContext().options.sl;
         var stoploss = indicatorPeriod.getStrategyContext().options.sl;
         if (lastSignal) {
-            if (lastSignal && price < stoploss) {
+            if ((lastSignal === 'long' && price < stoploss) || (lastSignal === 'short' && price > stoploss)) {
                 indicatorPeriod.getStrategyContext().options.sl = 0;
                 indicatorPeriod.getStrategyContext().options.high_watermark = 0;
                 debug._trigger = "profit below stoploss";
                 return 'close';
             }
-            if (lastSignal && price < trigger) {
+            if ((lastSignal === 'long' && price < trigger) || (lastSignal === 'short' && price > trigger)) {
                 indicatorPeriod.getStrategyContext().options.sl = 0;
                 indicatorPeriod.getStrategyContext().options.high_watermark = 0;
                 debug._trigger = "profit below trigger";
@@ -195,7 +177,7 @@ module.exports = class SpringSupport {
 
     getOptions() {
         return {
-            period: '1h',
+            period: '15m',
             length: 20,
             useSLTP: 1,
             useTrailingTP: 1,
