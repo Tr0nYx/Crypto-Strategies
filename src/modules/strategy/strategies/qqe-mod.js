@@ -43,15 +43,17 @@ module.exports = class QQE_Mod {
         if (rsiFull.length < options.rsi_length) {
             return SignalResult.createEmptySignal();
         }
+
         var rsi = rsiFull[rsiFull.length - 1];
+
         var Wilders_Period = options.rsi_length * 2 - 1;
         if (rsiFull.length < options.rsi_smoothing_length) {
             return SignalResult.createEmptySignal();
         }
         var RsiMa = this.ema(rsiFull, options.rsi_smoothing_length);
         var AtrRsi = [];
-        for (var i = 0, len = Wilders_Period; i < len; i++) {
-            AtrRsi[i] = Math.abs(RsiMa[i - 1] - RsiMa[i]);
+        for (var i = 0, len = RsiMa.length; i <= len; i++) {
+            AtrRsi[i] = Math.abs(RsiMa[i - 2] - RsiMa[i - 1]);
         }
         AtrRsi = AtrRsi.filter(Boolean);
         var MaAtrRsi = this.ema(AtrRsi, Wilders_Period);
@@ -72,10 +74,8 @@ module.exports = class QQE_Mod {
         } else {
             shortband = newshortband;
         }
-
-
-        var cross_1 = indicatorPeriod.getStrategyContext().options.longband < RSIndex[RSIndex.length - 1] && longband > RSIndex[RSIndex.length - 1];
-        var trend_cross = RSIndex[RSIndex.length - 1] < indicatorPeriod.getStrategyContext().options.shortband && RSIndex[RSIndex.length - 1] > shortband;
+        var cross_1 = this.cross(indicatorPeriod.getStrategyContext().options.longband, RSIndex[RSIndex.length - 1], RSIndex[RSIndex.length - 2]);
+        var trend_cross = this.cross(RSIndex[RSIndex.length - 1], indicatorPeriod.getStrategyContext().options.shortband, shortband);
         var trend = indicatorPeriod.getStrategyContext().options.trend;
         if (trend_cross === true) {
             trend.push(1);
@@ -86,6 +86,7 @@ module.exports = class QQE_Mod {
                 trend.push(trend[trend.length - 1]);
             }
         }
+
         var val;
 
         if (trend[trend.length - 1] === 1) {
@@ -99,11 +100,16 @@ module.exports = class QQE_Mod {
         indicatorPeriod.getStrategyContext().options.longband = longband;
         indicatorPeriod.getStrategyContext().options.shortband = shortband;
         const debug = {
-            dar: DeltaFastAtrRsi,
+            DeltaFastAtrRsi: DeltaFastAtrRsi,
             shortband: shortband,
             longband: longband,
+            AtrRsi: AtrRsi[AtrRsi.length - 1],
+            RSIndex: RSIndex[RSIndex.length - 1],
+            RsiMa: RsiMa[RsiMa.length - 1],
+            MaAtrRsi: MaAtrRsi[MaAtrRsi.length - 1],
             rsi: rsi,
-            FastAtrRsiTL: FastAtrRsiTL[FastAtrRsiTL.length - 1]
+            trend: trend[trend.length - 1],
+            FastAtrRsiTL: FastAtrRsiTL[FastAtrRsiTL.length - 1] + 50
         };
         if (FastAtrRsiTL.length < options.bollinger_length) {
             return SignalResult.createEmptySignal(debug);
@@ -113,23 +119,29 @@ module.exports = class QQE_Mod {
         var dev = options.bollinger_mult * this.stdev(FastAtrRsiTL, options.bollinger_length);
         var upper = basis[basis.length - 1] + dev;
         var lower = basis[basis.length - 1] - dev;
+
         if (indicatorPeriod.getStrategyContext().options.FastAtrRsiTL.length > options.bollinger_length) {
             indicatorPeriod.getStrategyContext().options.FastAtrRsiTL = indicatorPeriod.getStrategyContext().options.FastAtrRsiTL.slice(options.bollinger_length * -1);
         }
+        debug.dev = dev;
         debug.upper = upper;
         debug.lower = lower;
         debug.basis = basis[basis.length - 1];
+
 
         // QQE2
         Wilders_Period2 = options.rsi_length2 * 2 - 1
 
         var rsi2Full = indicatorPeriod.getIndicator('rsi2');
+        if (rsi2Full.length < options.rsi_length2) {
+            return SignalResult.createEmptySignal();
+        }
         var rsi2 = rsi2Full[rsi2Full.length - 1];
         var Wilders_Period2 = options.rsi_length2 * 2 - 1;
         var RsiMa2 = this.ema(rsi2Full, options.rsi_smoothing_length2);
         var AtrRsi2 = [];
-        for (var i = 0, len = Wilders_Period2; i < len; i++) {
-            AtrRsi2[i] = Math.abs(RsiMa2[i - 1] - RsiMa2[i]);
+        for (var i = 0, len = RsiMa2.length; i <= len; i++) {
+            AtrRsi2[i] = Math.abs(RsiMa2[i - 2] - RsiMa2[i - 1]);
         }
         AtrRsi2 = AtrRsi2.filter(Boolean);
         var MaAtrRsi2 = this.ema(AtrRsi2, Wilders_Period2);
@@ -139,9 +151,7 @@ module.exports = class QQE_Mod {
 
         var longband2 = 0;
         var shortband2 = 0;
-        //var trend2 = 0;
 
-        var RSIndex2 = RsiMa2;
         var newshortband2 = RSIndex2[RSIndex2.length - 1] + DeltaFastAtrRsi2;
         var newlongband2 = RSIndex2[RSIndex2.length - 1] - DeltaFastAtrRsi2;
         if (RSIndex2[RSIndex2.length - 2] > indicatorPeriod.getStrategyContext().options.longband2 && RSIndex2[RSIndex2.length - 1] > indicatorPeriod.getStrategyContext().options.longband2) {
@@ -155,8 +165,8 @@ module.exports = class QQE_Mod {
             shortband2 = newshortband2;
         }
 
-        var cross_2 = indicatorPeriod.getStrategyContext().options.longband2 < RSIndex2[RSIndex2.length - 1] && longband2 > RSIndex2[RSIndex2.length - 1];
-        var trend2_cross = RSIndex2[RSIndex2.length - 1] < indicatorPeriod.getStrategyContext().options.shortband2 && RSIndex2[RSIndex2.length - 1] > shortband2;
+        var cross_2 = this.cross(indicatorPeriod.getStrategyContext().options.longband2, RSIndex2[RSIndex2.length - 1], RSIndex2[RSIndex2.length - 2]);
+        var trend2_cross = this.cross(RSIndex2[RSIndex2.length - 1], indicatorPeriod.getStrategyContext().options.shortband2, shortband2);
 
         var trend2 = indicatorPeriod.getStrategyContext().options.trend2;
         if (trend2_cross === true) {
@@ -168,6 +178,11 @@ module.exports = class QQE_Mod {
                 trend2.push(trend2[trend2.length - 1]);
             }
         }
+        debug.AtrRsi2 = AtrRsi2[AtrRsi2.length - 1];
+        debug.MaAtrRsi2 = MaAtrRsi2[MaAtrRsi2.length - 1];
+        debug.upper = upper;
+        debug.lower = lower;
+        debug.DeltaFastAtrRsi2 = DeltaFastAtrRsi2;
 
         var FastAtrRsi2TL = trend2[trend2.length - 1] === 1 ? longband2 : shortband2;
 
@@ -229,7 +244,7 @@ module.exports = class QQE_Mod {
         var stddev = talib.execute({
             name: "STDDEV",
             startIdx: 0,
-            endIdx: values.length - 1,
+            endIdx: length,
             inReal: values,
             optInTimePeriod: length,
             optInNbDev: 1
@@ -248,14 +263,15 @@ module.exports = class QQE_Mod {
         return sma.result.outReal;
     }
 
-    ema(values, period) {
-
-        var k = 2 / (period + 1);
-        var emaArray = [values[0]];
-        for (var i = 1; i < values.length; i++) {
-            emaArray.push((values[i] - emaArray[i - 1]) * k + emaArray[i - 1]);
-        }
-        return emaArray;
+    ema(values, length) {
+        var ema = talib.execute({
+            name: "EMA",
+            startIdx: 0,
+            endIdx: values.length - 1,
+            inReal: values,
+            optInTimePeriod: length
+        });
+        return ema.result.outReal;
     }
 
     calcTrailingStopLoss(indicatorPeriod, options, lastSignal, debug) {
@@ -326,18 +342,95 @@ module.exports = class QQE_Mod {
         }
     }
 
+    cross(val, actValue, prevValue) {
+        return (val <= prevValue && val >= actValue) || (val >= prevValue && val <= actValue);
+    }
+
     getBacktestColumns() {
         return [
             {
                 label: 'trend',
-                value: row => {
-                    return row.trend === 'up' ? 'success' : 'danger';
-                },
-                type: 'icon'
+                value: 'trend',
+                type: 'number'
             },
             {
                 label: 'signalLine',
                 value: 'signalLine',
+                type: 'number'
+            },
+            {
+                label: 'FastAtrRsiTL',
+                value: 'FastAtrRsiTL',
+                type: 'number'
+            },
+            {
+                label: 'DeltaFastAtrRsi',
+                value: 'DeltaFastAtrRsi',
+                type: 'number'
+            },
+            {
+                label: 'MaAtrRsi',
+                value: 'MaAtrRsi',
+                type: 'number'
+            },
+            {
+                label: 'AtrRsi',
+                value: 'AtrRsi',
+                type: 'number'
+            },
+            {
+                label: 'longband',
+                value: 'longband',
+                type: 'number'
+            },
+            {
+                label: 'shortband',
+                value: 'shortband',
+                type: 'number'
+            },
+            {
+                label: 'RSIndex',
+                value: 'RSIndex',
+                type: 'number'
+            },
+            {
+                label: 'RsiMa',
+                value: 'RsiMa',
+                type: 'number'
+            },
+            {
+                label: 'upper',
+                value: 'upper',
+                type: 'number'
+            },
+            {
+                label: 'lower',
+                value: 'lower',
+                type: 'number'
+            },
+            {
+                label: 'dev',
+                value: 'dev',
+                type: 'number'
+            },
+            {
+                label: 'basis',
+                value: 'basis',
+                type: 'number'
+            },
+            {
+                label: 'DeltaFastAtrRsi2',
+                value: 'DeltaFastAtrRsi2',
+                type: 'number'
+            },
+            {
+                label: 'AtrRsi2',
+                value: 'AtrRsi2',
+                type: 'number'
+            },
+            {
+                label: 'MaAtrRsi2',
+                value: 'MaAtrRsi2',
                 type: 'number'
             },
             {
