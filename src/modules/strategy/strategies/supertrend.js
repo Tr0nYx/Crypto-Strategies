@@ -20,20 +20,17 @@ module.exports = class SuperTrend {
     period(indicatorPeriod, options) {
         var up1, dn1, trend;
         const lastSignal = indicatorPeriod.getLastSignal();
-        var atr = indicatorPeriod.getLatestIndicator('atr');
         var lastCandle = indicatorPeriod.getIndicator('candles').slice(-2, -1)[0];
         var candle = indicatorPeriod.getLatestIndicator('candles');
-        var candles = indicatorPeriod.getIndicator('candles');
-
-        var tr = this.tr(candles, options.atrperiod);
-        var atr2 = this.sma(tr, options.atrperiod);
-        console.log("atr",atr);
-        if (options.changeAtr == 1){
-            atr = atr2[atr2.length - 1];
+        var candles = indicatorPeriod.getIndicator('candles').slice(options.atrperiod * - 1);
+        var src = (candle.high + candle.low) / 2;
+        var atr = Math.max(Math.max(candle.high-candle.low, Math.abs(candle.high-lastCandle.close)), Math.abs(candle.low-lastCandle.close));
+        if (options.changeAtr === 1){
+            atr= indicatorPeriod.getLatestIndicator('atr');
         }
-        console.log("atr2",atr2);
-        var up = (candle.high + candle.low) / 2 - (options.atrmultiplier * atr);
-        var dn = (candle.high + candle.low) / 2 + (options.atrmultiplier * atr);
+
+        var up = src - (options.atrmultiplier * atr);
+        var dn = src + (options.atrmultiplier * atr);
         if (!indicatorPeriod.getStrategyContext().options.up) {
             up1 = up;
         } else {
@@ -46,18 +43,20 @@ module.exports = class SuperTrend {
         }
         if (lastCandle.close > up1) {
             indicatorPeriod.getStrategyContext().options.up = Math.max(up, up1);
+        } else {
+            indicatorPeriod.getStrategyContext().options.up = up;
         }
         if (lastCandle.close < dn1) {
             indicatorPeriod.getStrategyContext().options.dn = Math.min(dn, dn1);
+        } else {
+            indicatorPeriod.getStrategyContext().options.dn = dn;
         }
         var prevTrend = indicatorPeriod.getStrategyContext().options.trend;
         trend = 1;
         if (!indicatorPeriod.getStrategyContext().options.trend) {
             indicatorPeriod.getStrategyContext().options.trend = trend;
-        } else {
-            trend = indicatorPeriod.getStrategyContext().options.trend;
         }
-
+        trend = indicatorPeriod.getStrategyContext().options.trend;
         if (trend === -1 && candle.close > dn1) {
             trend = 1;
         } else if (trend === 1 && candle.close < up1) {
@@ -65,18 +64,29 @@ module.exports = class SuperTrend {
         }
         indicatorPeriod.getStrategyContext().options.trend = trend;
 
-        var buySignal = trend == 1 && prevTrend == -1;
-        var sellSignal = trend == -1 && prevTrend == 1;
+        var buySignal = trend === 1 && prevTrend === -1;
+        var sellSignal = trend === -1 && prevTrend === 1;
 
         const debug = {
             trend: trend,
-            prevTrend: prevTrend
+            prevTrend: prevTrend,
+            dn1: dn1,
+            up1: up1,
+            close: candle.close,
+            buySignal: buySignal,
+            sellSignal: sellSignal,
+        }
+        if (trend === 1 && !lastSignal){
+            return SignalResult.createSignal('long', debug);
+        }
+        if (trend === -1 && !lastSignal){
+            return SignalResult.createSignal('short', debug);
         }
         if (sellSignal){
             if (lastSignal === 'long'){
                 return SignalResult.createSignal('close', debug);
             }
-            if (lastSignal === 'short'){
+            if (lastSignal !== 'short'){
                 return SignalResult.createSignal('short', debug);
             }
         } else if (buySignal){
@@ -91,13 +101,14 @@ module.exports = class SuperTrend {
     }
 
     tr(values, length){
+        console.log(values.length);
         var tr = talib.execute({
             name: "TRANGE",
             high: values.high,
             low: values.low,
             close: values.close,
             startIdx: 0,
-            endIdx: values.length - 1
+            endIdx: length
         });
 
         return tr.result.outReal;
@@ -131,6 +142,26 @@ module.exports = class SuperTrend {
                     return row.prevTrend === 1 ? 'success' : 'danger';
                 },
                 type: 'icon'
+            },
+            {
+                label: 'up1',
+                value: 'up1'
+            },
+            {
+                label: 'dn1',
+                value: 'dn1'
+            },
+            {
+                label: 'close',
+                value: 'close'
+            },
+            {
+                label: 'buySignal',
+                value: 'buySignal'
+            },
+            {
+                label: 'sellSignal',
+                value: 'sellSignal'
             }
         ]
     }
@@ -144,41 +175,3 @@ module.exports = class SuperTrend {
         };
     }
 }
-/*
-//@version=4
-study("Supertrend", overlay = true, format=format.price, precision=2, resolution="")
-
-Periods = input(title="ATR Period", type=input.integer, defval=10)
-src = input(hl2, title="Source")
-Multiplier = input(title="ATR Multiplier", type=input.float, step=0.1, defval=3.0)
-changeATR= input(title="Change ATR Calculation Method ?", type=input.bool, defval=true)
-showsignals = input(title="Show Buy/Sell Signals ?", type=input.bool, defval=true)
-highlighting = input(title="Highlighter On/Off ?", type=input.bool, defval=true)
-atr2 = sma(tr, Periods)
-atr= changeATR ? atr(Periods) : atr2
-up=src-(Multiplier*atr)
-up1 = nz(up[1],up)
-up := close[1] > up1 ? max(up,up1) : up
-dn=src+(Multiplier*atr)
-dn1 = nz(dn[1], dn)
-dn := close[1] < dn1 ? min(dn, dn1) : dn
-trend = 1
-trend := nz(trend[1], trend)
-trend := trend == -1 and close > dn1 ? 1 : trend == 1 and close < up1 ? -1 : trend
-upPlot = plot(trend == 1 ? up : na, title="Up Trend", style=plot.style_linebr, linewidth=2, color=color.green)
-buySignal = trend == 1 and trend[1] == -1
-plotshape(buySignal ? up : na, title="UpTrend Begins", location=location.absolute, style=shape.circle, size=size.tiny, color=color.green, transp=0)
-plotshape(buySignal and showsignals ? up : na, title="Buy", text="Buy", location=location.absolute, style=shape.labelup, size=size.tiny, color=color.green, textcolor=color.white, transp=0)
-dnPlot = plot(trend == 1 ? na : dn, title="Down Trend", style=plot.style_linebr, linewidth=2, color=color.red)
-sellSignal = trend == -1 and trend[1] == 1
-plotshape(sellSignal ? dn : na, title="DownTrend Begins", location=location.absolute, style=shape.circle, size=size.tiny, color=color.red, transp=0)
-plotshape(sellSignal and showsignals ? dn : na, title="Sell", text="Sell", location=location.absolute, style=shape.labeldown, size=size.tiny, color=color.red, textcolor=color.white, transp=0)
-mPlot = plot(ohlc4, title="", style=plot.style_circles, linewidth=0)
-longFillColor = highlighting ? (trend == 1 ? color.green : color.white) : color.white
-shortFillColor = highlighting ? (trend == -1 ? color.red : color.white) : color.white
-fill(mPlot, upPlot, title="UpTrend Highligter", color=longFillColor)
-fill(mPlot, dnPlot, title="DownTrend Highligter", color=shortFillColor)
-alertcondition(buySignal, title="SuperTrend Buy", message="SuperTrend Buy!")
-alertcondition(sellSignal, title="SuperTrend Sell", message="SuperTrend Sell!")
-changeCond = trend != trend[1]
-alertcondition(changeCond, title="SuperTrend Direction Change", message="SuperTrend has changed direction!")

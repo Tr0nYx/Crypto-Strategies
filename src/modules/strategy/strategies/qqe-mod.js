@@ -56,6 +56,7 @@ module.exports = class QQE_Mod {
             AtrRsi[i] = Math.abs(RsiMa[i - 2] - RsiMa[i - 1]);
         }
         AtrRsi = AtrRsi.filter(Boolean);
+		
         var MaAtrRsi = this.ema(AtrRsi, Wilders_Period);
         var dar = this.ema(MaAtrRsi, Wilders_Period);
         var DeltaFastAtrRsi = dar[dar.length - 1] * options.qqe_factor;
@@ -264,14 +265,12 @@ module.exports = class QQE_Mod {
     }
 
     ema(values, length) {
-        var ema = talib.execute({
-            name: "EMA",
-            startIdx: 0,
-            endIdx: values.length - 1,
-            inReal: values,
-            optInTimePeriod: length
-        });
-        return ema.result.outReal;
+		var k = 2 / (length + 1);
+        var emaArray = [values[0]];
+        for (var i = 1; i < values.length; i++) {
+            emaArray.push((values[i] - emaArray[i - 1]) * k + emaArray[i - 1]);
+        }
+        return emaArray;
     }
 
     calcTrailingStopLoss(indicatorPeriod, options, lastSignal, debug) {
@@ -356,81 +355,6 @@ module.exports = class QQE_Mod {
             {
                 label: 'signalLine',
                 value: 'signalLine',
-                type: 'number'
-            },
-            {
-                label: 'FastAtrRsiTL',
-                value: 'FastAtrRsiTL',
-                type: 'number'
-            },
-            {
-                label: 'DeltaFastAtrRsi',
-                value: 'DeltaFastAtrRsi',
-                type: 'number'
-            },
-            {
-                label: 'MaAtrRsi',
-                value: 'MaAtrRsi',
-                type: 'number'
-            },
-            {
-                label: 'AtrRsi',
-                value: 'AtrRsi',
-                type: 'number'
-            },
-            {
-                label: 'longband',
-                value: 'longband',
-                type: 'number'
-            },
-            {
-                label: 'shortband',
-                value: 'shortband',
-                type: 'number'
-            },
-            {
-                label: 'RSIndex',
-                value: 'RSIndex',
-                type: 'number'
-            },
-            {
-                label: 'RsiMa',
-                value: 'RsiMa',
-                type: 'number'
-            },
-            {
-                label: 'upper',
-                value: 'upper',
-                type: 'number'
-            },
-            {
-                label: 'lower',
-                value: 'lower',
-                type: 'number'
-            },
-            {
-                label: 'dev',
-                value: 'dev',
-                type: 'number'
-            },
-            {
-                label: 'basis',
-                value: 'basis',
-                type: 'number'
-            },
-            {
-                label: 'DeltaFastAtrRsi2',
-                value: 'DeltaFastAtrRsi2',
-                type: 'number'
-            },
-            {
-                label: 'AtrRsi2',
-                value: 'AtrRsi2',
-                type: 'number'
-            },
-            {
-                label: 'MaAtrRsi2',
-                value: 'MaAtrRsi2',
                 type: 'number'
             },
             {
